@@ -1,0 +1,31 @@
+My Slide Image Downloader is a Chrome Extension designed to help users batch download images and graphics from their active Google Slides presentations into a single ZIP file. 
+
+
+**Privacy PolicyEffective Date:** May 27, 2026
+
+This Privacy Policy governs the use of the Chrome Extension "**[My Slide Image Downloader]**" (hereinafter referred to as "the Extension").
+
+**1. Zero Data Collection Policy**
+We take your privacy very seriously. The Extension operates under a strict zero-data collection policy.
+
+- We **DO NOT** collect, store, transmit, or share any personal information, account credentials, or presentation contents.
+- All data processing, image extraction, and ZIP compression occur strictly within your local browser environment.
+
+**2. Explanation of Permissions Used**
+To provide its core features, the Extension requests the following permissions, which are used solely for functional purposes:
+
+- **presentations.readonly / drive.readonly:** Used exclusively to read the image elements within the user's active Google Slides via the official API for the batch download feature.
+- **identity:** Used to obtain a temporary OAuth token required to authenticate requests to the Google Slides API locally.
+- **downloads:** Used to trigger Chrome's native download manager to save the extracted images or generated ZIP file to your computer.
+- **activeTab / Host Permissions (<all_urls>):** Used to access the active Google Slides tab to detect right-click interactions on images and fetch their original source URLs (including `filesystem:` or `blob:` types) for high-quality extraction.
+
+**3. Third-Party Services**
+The Extension bundles the JSZip library locally to package multiple images. No data is sent to JSZip or any other third-party servers.
+
+**4. Changes to This Policy**
+We may update our Privacy Policy from time to time. Any changes will be posted on this page.
+
+**5. Contact Us**
+If you have any questions about this Privacy Policy, please contact us at:
+
+- **Developer Email:** abnormaljh@gmail.com
