@@ -4,48 +4,92 @@
   <meta charset="utf-8">
   <title>Google Drive Access Authorization</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding-top: 100px; background: #f8f9fa; color: #333; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding-top: 80px; background: #f8f9fa; color: #333; }
+    h2 { font-size: 18px; font-weight: bold; color: #1a73e8; margin-top: 0; }
+    p { font-size: 13px; color: #666; line-height: 1.5; margin-bottom: 25px; }
+    
+    .btn-connect {
+      padding: 12px 24px;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn-connect:hover { background: #1557b0; }
+    .btn-connect:active { transform: scale(0.98); }
+
+    #error-msg { color: #d93025; font-size: 12px; margin-top: 20px; display: none; font-weight: bold; }
+    
+    #loading-zone { display: none; }
     .loader { border: 4px solid #f3f3f3; border-top: 4px solid #1a73e8; border-radius: 50%; width: 44px; height: 44px; animation: spin 1s linear infinite; margin: 24px auto; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    h2 { font-size: 18px; font-weight: bold; color: #1a73e8; }
-    p { font-size: 13px; color: #666; line-height: 1.5; }
-    #error-msg { color: #d93025; font-size: 12px; margin-top: 15px; display: none; font-weight: bold; }
   </style>
   <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
 </head>
 <body>
-  <h2>Google Picker Security Syncing...</h2>
-  <div class="loader"></div>
-  <p>안전하게 현재 슬라이드 문서 접근 권한을 동기화하고 있습니다.</p>
+
+  <div id="start-zone">
+    <h2>Google Drive 권한 동기화</h2>
+    <p>구글 보안 규정에 맞추어 안전하게 현재 슬라이드 문서의<br>이미지를 추출할 수 있도록 아래 버튼을 눌러 승인해 주세요.</p>
+    <button class="btn-connect" id="btnConnect">🔐 구글 계정 연결하기</button>
+  </div>
+
+  <div id="loading-zone">
+    <h2>Google Picker Security Syncing...</h2>
+    <div class="loader"></div>
+    <p>안전하게 보안 동기화를 진행하고 있습니다. 잠시만 기다려주세요...</p>
+  </div>
+
   <div id="error-msg"></div>
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const targetPresentationId = urlParams.get('id');
-    const accessToken = urlParams.get('token'); // 💡 확장 프로그램 본체 토큰 주입받음
+        
+    const clientId = "690467533026-u1gabgn2708n38nqk0j0lffbjppf4vec.apps.googleusercontent.com";
         
     const developerKey = "AIzaSyAmXkHDc5BjBRv_gvamTAMqmoY1YQCKh0c";
+    
+    let accessToken = null;
 
-    window.onload = () => {
-      if (!targetPresentationId || !accessToken) {
-        showError("인증 파라미터가 누락되었습니다. 확장 프로그램을 다시 켜주세요.");
-        return;
-      }
-      // 브라우저 팝업 차단 없이 즉시 구글 공식 피커 모달 로드
-      gapi.load('picker', { 'callback': openTargetPicker });
-    };
+    // 웹 애플리케이션 클라이언트 규격으로 독립 토큰 발급기 연동
+    const tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: (tokenResponse) => {
+        if (tokenResponse.error) {
+          showError("인증 실패: " + tokenResponse.error_description);
+          return;
+        }
+        accessToken = tokenResponse.access_token;
+        
+        document.getElementById('start-zone').style.display = 'none';
+        document.getElementById('loading-zone').style.display = 'block';
+        
+        gapi.load('picker', { 'callback': openTargetPicker });
+      },
+    });
+
+    document.getElementById('btnConnect').addEventListener('click', () => {
+      tokenClient.requestAccessToken();
+    });
 
     function openTargetPicker() {
       try {
         const view = new google.picker.DocsView(google.picker.ViewId.PRESENTATIONS);
         view.setFileIds([targetPresentationId]);
-    
+
         const picker = new google.picker.PickerBuilder()
           .addView(view)
-          .setOAuthToken(accessToken)
+          .setOAuthToken(accessToken) // 🌟 내 웹 토큰과 일치시키므로 문서가 무조건 노출됩니다!
           .setDeveloperKey(developerKey)
-          // 💡 [진짜 최종 교정] 구글 피커에서 공유 드라이브를 지원하는 정확한 공식 명령어입니다!
-          .enableFeature(google.picker.Feature.SUPPORT_SHARED_DRIVES) 
+          .enableFeature(google.picker.Feature.SUPPORT_SHARED_DRIVES) // 🌟 공유 드라이브 완벽 지원 공식 규격 명칭
           .setCallback((data) => {
             if (data.action === google.picker.Action.PICKED || data.action === google.picker.Action.CANCEL) {
               window.close();
@@ -57,7 +101,7 @@
         showError("피커 생성 오류: " + e.message);
       }
     }
-    
+
     function showError(msg) {
       const errEl = document.getElementById('error-msg');
       if (errEl) {
