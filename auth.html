@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Google Drive Access Authorization</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding-top: 80px; background: #f8f9fa; color: #333; }
+    .loader { border: 4px solid #f3f3f3; border-top: 4px solid #1a73e8; border-radius: 50%; width: 44px; height: 44px; animation: spin 1s linear infinite; margin: 24px auto; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    h2 { font-size: 18px; font-weight: bold; color: #1a73e8; }
+    p { font-size: 13px; color: #666; line-height: 1.5; }
+  </style>
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script src="https://accounts.google.com/gsi/client"></script>
+</head>
+<body>
+  <h2>Google Picker Security Syncing...</h2>
+  <div class="loader"></div>
+  <p>구글 보안 규정에 맞추어 안전하게<br>현재 슬라이드 문서 접근 권한을 동기화하고 있습니다.</p>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetPresentationId = urlParams.get('id');
+    const clientId = "690467533026-cuobfog487vm03esjavm5uuf2s79i097.apps.googleusercontent.com";
+    let accessToken = null;
+
+    // 1. drive.file 토큰 발급 프로세스 작동
+    const tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: (tokenResponse) => {
+        accessToken = tokenResponse.access_token;
+        gapi.load('picker', { 'callback': openTargetPicker });
+      },
+    });
+
+    window.onload = () => { tokenClient.requestAccessToken({ prompt: 'none' }); };
+
+    // 2. 구글이 강력 지시한 setFileIds를 활용해 현재 문서만 정확히 주입형 팝업 타겟팅
+    function openTargetPicker() {
+      const view = new google.picker.View(google.picker.ViewId.PRESENTATIONS);
+      
+      // 🎯 [무적의 치트키] 사용자가 보고 있던 그 슬라이드 ID만 Picker 창에 강제 주입해 띄웁니다!
+      view.setFileIds(targetPresentationId);
+
+      const picker = new google.picker.PickerBuilder()
+        .addView(view)
+        .setOAuthToken(accessToken)
+        .setCallback((data) => {
+          if (data.action === google.picker.Action.PICKED) {
+            // 본체 popup.js에게 승인 완료 성공 무선 신호 송신
+            chrome.runtime.sendMessage({ action: "AUTH_SUCCESS" });
+            window.close(); // 승인 완료 후 깔끔하게 창 닫기
+          }
+        })
+        .build();
+      picker.setVisible(true);
+    }
+  </script>
+</body>
+</html>
