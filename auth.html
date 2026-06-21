@@ -38,14 +38,14 @@
     function openTargetPicker() {
       try {
         const view = new google.picker.DocsView(google.picker.ViewId.PRESENTATIONS);
-        
         view.setFileIds([targetPresentationId]);
     
         const picker = new google.picker.PickerBuilder()
           .addView(view)
           .setOAuthToken(accessToken)
           .setDeveloperKey(developerKey)
-          .setEnableSharedDrives(true) // 💡 [교정] 여기에 넣어야 구글 API가 정상 인식합니다! (Builder의 메서드임)
+          // 💡 [진짜 최종 교정] 구글 피커에서 공유 드라이브를 지원하는 정확한 공식 명령어입니다!
+          .enableFeature(google.picker.Feature.SUPPORT_SHARED_DRIVES) 
           .setCallback((data) => {
             if (data.action === google.picker.Action.PICKED || data.action === google.picker.Action.CANCEL) {
               window.close();
@@ -57,7 +57,7 @@
         showError("피커 생성 오류: " + e.message);
       }
     }
-
+    
     function showError(msg) {
       const errEl = document.getElementById('error-msg');
       if (errEl) {
