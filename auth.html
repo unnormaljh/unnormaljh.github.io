@@ -7,16 +7,29 @@
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding-top: 80px; background: #f8f9fa; color: #333; }
     h2 { font-size: 18px; font-weight: bold; color: #1a73e8; margin-top: 0; }
     p { font-size: 13px; color: #666; line-height: 1.5; margin-bottom: 25px; }
-    .btn-connect { padding: 12px 24px; background: #1a73e8; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: background 0.2s, transform 0.1s; }
+    
+    .btn-connect {
+      padding: 12px 24px;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: background 0.2s, transform 0.1s;
+    }
     .btn-connect:hover { background: #1557b0; }
     .btn-connect:active { transform: scale(0.98); }
+
     #error-msg { color: #d93025; font-size: 12px; margin-top: 20px; display: none; font-weight: bold; }
+    
     #loading-zone { display: none; }
     .loader { border: 4px solid #f3f3f3; border-top: 4px solid #1a73e8; border-radius: 50%; width: 44px; height: 44px; animation: spin 1s linear infinite; margin: 24px auto; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
   </style>
   <script src="https://apis.google.com/js/api.js"></script>
-  <script src="https://accounts.google.com/gsi/client"></script>
 </head>
 <body>
 
@@ -35,67 +48,91 @@
   <div id="error-msg"></div>
 
   <script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const targetPresentationId = urlParams.get('id');
-    const redirectUri = urlParams.get('redirect'); // 💡 크롬 보안 리디렉션 기지국 주소 접수
-    
+    // 유저님이 제공해주신 무결점 공식 키 패키지 고정
     const clientId = "690467533026-u1gabgn2708n38nqk0j0lffbjppf4vec.apps.googleusercontent.com";
     const developerKey = "AIzaSyAmXkHDc5BjBRv_gvamTAMqmoY1YQCKh0c";
-    let accessToken = null;
 
-    const tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: 'https://www.googleapis.com/auth/drive.file',
-      callback: (tokenResponse) => {
-        if (tokenResponse.error) {
-          showError("인증 실패: " + tokenResponse.error_description);
-          return;
-        }
-        accessToken = tokenResponse.access_token;
+    window.onload = () => {
+      // 구글 로그인 인증을 마치고 토큰과 함께 복귀했는지 주소창 해시(#) 확인
+      const hash = window.location.hash.substring(1);
+      const hashParams = new URLSearchParams(hash);
+      const accessToken = hashParams.get('access_token');
+      const state = hashParams.get('state');
+
+      if (accessToken && state) {
+        // [복귀 모드] 구글 서버로부터 인증 토큰을 안전하게 수령 완료한 상태
+        const parts = decodeURIComponent(state).split('^^^');
+        const targetPresentationId = parts[0];
+        const originalRedirectUri = parts[1];
+
+        // 대문을 숨기고 로딩 스피너 작동
         document.getElementById('start-zone').style.display = 'none';
         document.getElementById('loading-zone').style.display = 'block';
-        gapi.load('picker', { 'callback': openTargetPicker });
-      },
-    });
 
-    document.getElementById('btnConnect').addEventListener('click', () => {
-      if (!targetPresentationId || !redirectUri) {
-        showError("필수 인증 파라미터가 누락되었습니다.");
-        return;
-      }
-      tokenClient.requestAccessToken();
-    });
+        // 구글 피커 API 로드 (팝업이 아닌 인라인 방식으로 현재 창 내부에 안전 도킹)
+        gapi.load('picker', {
+          'callback': () => {
+            try {
+              const view = new google.picker.DocsView(google.picker.ViewId.DOCS);
+              view.setMimeTypes("application/vnd.google-apps.presentation");
+              view.setFileIds(targetPresentationId);
 
-    function openTargetPicker() {
-      try {
-        const view = new google.picker.DocsView(google.picker.ViewId.DOCS);
-        view.setMimeTypes("application/vnd.google-apps.presentation");
-        view.setFileIds(targetPresentationId);
-
-        const picker = new google.picker.PickerBuilder()
-          .addView(view)
-          .setOAuthToken(accessToken) 
-          .setDeveloperKey(developerKey)
-          .enableFeature(google.picker.Feature.SUPPORT_DRIVES) 
-          .setCallback((data) => {
-            if (data.action === google.picker.Action.PICKED) {
-              // 💡 [무적의 피날레] 선택 완료 시 본체 기지국 주소 해시 뒤에 토큰을 태워 강제 리디렉션!
-              // 이렇게 하면 크롬 브라우저가 알아서 감지하고 창을 안전하게 자동 종료하며 토큰을 popup.js에 꽂아줍니다.
-              window.location.href = `${redirectUri}#token=${encodeURIComponent(accessToken)}`;
-            } else if (data.action === google.picker.Action.CANCEL) {
-              window.location.href = redirectUri; // 취소 시에도 안전하게 복귀
+              const picker = new google.picker.PickerBuilder()
+                .addView(view)
+                .setOAuthToken(accessToken)
+                .setDeveloperKey(developerKey)
+                .enableFeature(google.picker.Feature.SUPPORT_DRIVES)
+                .setCallback((data) => {
+                  if (data.action === google.picker.Action.PICKED) {
+                    // 💡 유저가 [Select]를 누르면 크롬 기지국 주소창 뒤에 토큰을 매달아 리디렉션 종결!
+                    window.location.href = `${originalRedirectUri}#token=${encodeURIComponent(accessToken)}`;
+                  } else if (data.action === google.picker.Action.CANCEL) {
+                    window.location.href = originalRedirectUri;
+                  }
+                })
+                .build();
+              picker.setVisible(true);
+            } catch (e) {
+              showError("피커 생성 오류: " + e.message);
             }
-          })
-          .build();
-        picker.setVisible(true);
-      } catch (e) {
-        showError("피커 생성 오류: " + e.message);
+          }
+        });
+      } else {
+        // [최초 진입 모드] 확장 프로그램 본체에서 처음 넘어온 상태
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetPresentationId = urlParams.get('id');
+        const redirectUri = urlParams.get('redirect');
+
+        if (targetPresentationId && redirectUri) {
+          document.getElementById('start-zone').style.display = 'block';
+          document.getElementById('loading-zone').style.display = 'none';
+
+          document.getElementById('btnConnect').onclick = () => {
+            // 현재 문서 ID와 확장 프로그램 복귀 주소를 하나의 문자열로 묶어 state에 보존
+            const stateStr = `${targetPresentationId}^^^${redirectUri}`;
+            
+            // 💡 [치트키] 팝업창을 여는 대신, 현재 보안창 주소 자체를 구글 OAuth 페이지로 즉시 치환 리디렉션!
+            const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+              `client_id=${clientId}` +
+              `&redirect_uri=${encodeURIComponent('https://unnormaljh.github.io/auth.html')}` +
+              `&response_type=token` +
+              `&scope=${encodeURIComponent('https://www.googleapis.com/auth/drive.file')}` +
+              `&state=${encodeURIComponent(stateStr)}`;
+            
+            window.location.href = oauthUrl;
+          };
+        } else {
+          showError("인증 파라미터가 누락되었습니다. 확장 프로그램을 다시 실행해 주세요.");
+        }
       }
-    }
+    };
 
     function showError(msg) {
       const errEl = document.getElementById('error-msg');
-      if (errEl) { errEl.innerText = msg; errEl.style.display = 'block'; }
+      if (errEl) {
+        errEl.innerText = msg;
+        errEl.style.display = 'block';
+      }
     }
   </script>
 </body>
