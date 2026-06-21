@@ -51,14 +51,13 @@
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const targetPresentationId = urlParams.get('id');
-        
+    
     const clientId = "690467533026-u1gabgn2708n38nqk0j0lffbjppf4vec.apps.googleusercontent.com";
         
     const developerKey = "AIzaSyAmXkHDc5BjBRv_gvamTAMqmoY1YQCKh0c";
     
     let accessToken = null;
 
-    // 웹 애플리케이션 클라이언트 규격으로 독립 토큰 발급기 연동
     const tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: 'https://www.googleapis.com/auth/drive.file',
@@ -77,28 +76,27 @@
     });
 
     document.getElementById('btnConnect').addEventListener('click', () => {
+      if (!targetPresentationId) {
+        showError("슬라이드 ID 파라미터가 누락되었습니다. 확장 프로그램을 다시 켜주세요.");
+        return;
+      }
       tokenClient.requestAccessToken();
     });
 
     function openTargetPicker() {
       try {
-        // 💡 [정밀 교정 1] DocsView는 ViewId.DOCS를 기반으로 생성해야 구글 엔진이 인식합니다.
         const view = new google.picker.DocsView(google.picker.ViewId.DOCS);
-        
-        // 💡 [정밀 교정 2] 구글 슬라이드(Presentation) 파일만 필터링하도록 마임타입을 명시합니다.
         view.setMimeTypes("application/vnd.google-apps.presentation");
         
-        // 💡 [정밀 교정 3] 회사 공유 드라이브 및 공유받은 문서함 등 전체 영역을 검색하도록 허용합니다.
-        view.setAllDriveItems(true);
-        
-        // 현재 열려있는 슬라이드 ID를 타겟팅합니다.
-        view.setFileIds([targetPresentationId]);
-    
+        // 💡 [정답 반영 1] fileIds는 대괄호가 없는 순수 '문자열'이어야만 구글 규격에 매칭됩니다.
+        view.setFileIds(targetPresentationId);
+
         const picker = new google.picker.PickerBuilder()
           .addView(view)
-          .setOAuthToken(accessToken)
+          .setOAuthToken(accessToken) 
           .setDeveloperKey(developerKey)
-          .enableFeature(google.picker.Feature.SUPPORT_SHARED_DRIVES) // 공유 드라이브 피처 활성화
+          // 💡 [정답 반영 2] 공유 드라이브를 완벽하게 연동하는 구글 공식 피처 명칭입니다.
+          .enableFeature(google.picker.Feature.SUPPORT_DRIVES) 
           .setCallback((data) => {
             if (data.action === google.picker.Action.PICKED || data.action === google.picker.Action.CANCEL) {
               window.close();
