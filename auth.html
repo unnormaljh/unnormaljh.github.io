@@ -9,6 +9,7 @@
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     h2 { font-size: 18px; font-weight: bold; color: #1a73e8; }
     p { font-size: 13px; color: #666; line-height: 1.5; }
+    #error-msg { color: #d93025; font-size: 12px; margin-top: 15px; display: none; font-weight: bold; }
   </style>
   <script src="https://apis.google.com/js/api.js"></script>
   <script src="https://accounts.google.com/gsi/client"></script>
@@ -17,44 +18,64 @@
   <h2>Google Picker Security Syncing...</h2>
   <div class="loader"></div>
   <p>구글 보안 규정에 맞추어 안전하게<br>현재 슬라이드 문서 접근 권한을 동기화하고 있습니다.</p>
+  <div id="error-msg"></div>
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const targetPresentationId = urlParams.get('id');
+    
+    // 💡 중요: 1단계에서 세팅한 '웹 애플리케이션'용 Client ID를 적어주셔야 안전합니다.
     const clientId = "690467533026-cuobfog487vm03esjavm5uuf2s79i097.apps.googleusercontent.com";
     let accessToken = null;
 
-    // 1. drive.file 토큰 발급 프로세스 작동
+    // 1. 초기화 및 세션 갱신
     const tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: 'https://www.googleapis.com/auth/drive.file',
       callback: (tokenResponse) => {
+        if (tokenResponse.error) {
+          showError("인증 실패: " + tokenResponse.error_description);
+          return;
+        }
         accessToken = tokenResponse.access_token;
         gapi.load('picker', { 'callback': openTargetPicker });
       },
     });
 
-    window.onload = () => { tokenClient.requestAccessToken({ prompt: 'none' }); };
+    window.onload = () => {
+      // 🔥 [변경] prompt: 'none' 편법을 걷어내고 정석대로 유저 동의 창을 띄웁니다!
+      tokenClient.requestAccessToken(); 
+    };
 
-    // 2. 구글이 강력 지시한 setFileIds를 활용해 현재 문서만 정확히 주입형 팝업 타겟팅
     function openTargetPicker() {
-      const view = new google.picker.View(google.picker.ViewId.PRESENTATIONS);
-      
-      // 🎯 [무적의 치트키] 사용자가 보고 있던 그 슬라이드 ID만 Picker 창에 강제 주입해 띄웁니다!
-      view.setFileIds(targetPresentationId);
+      try {
+        const view = new google.picker.View(google.picker.ViewId.PRESENTATIONS);
+        view.setFileIds(targetPresentationId);
 
-      const picker = new google.picker.PickerBuilder()
-        .addView(view)
-        .setOAuthToken(accessToken)
-        .setCallback((data) => {
-          if (data.action === google.picker.Action.PICKED) {
-            // 본체 popup.js에게 승인 완료 성공 무선 신호 송신
-            chrome.runtime.sendMessage({ action: "AUTH_SUCCESS" });
-            window.close(); // 승인 완료 후 깔끔하게 창 닫기
-          }
-        })
-        .build();
-      picker.setVisible(true);
+        const picker = new google.picker.PickerBuilder()
+          .addView(view)
+          .setOAuthToken(accessToken)
+          .setCallback((data) => {
+            if (data.action === google.picker.Action.PICKED) {
+              chrome.runtime.sendMessage({ action: "AUTH_SUCCESS" });
+              window.close();
+            } else if (data.action === google.picker.Action.CANCEL) {
+              showError("사용자가 권한 요청을 취소했습니다.");
+            }
+          })
+          .build();
+        picker.setVisible(true);
+      } catch (e) {
+        showError("피커 생성 오류: " + e.message);
+      }
+    }
+
+    function showError(msg) {
+      const errEl = document.getElementById('error-msg');
+      if (errEl) {
+        errEl.innerText = msg;
+        errEl.style.display = 'block';
+      }
     }
   </script>
 </body>
