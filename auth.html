@@ -77,16 +77,20 @@
 
     function openTargetPicker() {
       try {
-        const view = new google.picker.View(google.picker.ViewId.PRESENTATIONS);
-        view.setFileIds(targetPresentationId);
-
+        // 💡 [수정] picker.View 대신 picker.DocsView를 사용해야 setFileIds 함수가 활성화됩니다!
+        const view = new google.picker.DocsView(google.picker.ViewId.PRESENTATIONS);
+        
+        // 💡 [수정] ID를 대괄호 [ ]로 감싸 배열 형태로 전달해야 구글 API 규격에 맞습니다.
+        view.setFileIds([targetPresentationId]);
+  
         const picker = new google.picker.PickerBuilder()
           .addView(view)
           .setOAuthToken(accessToken)
           .setCallback((data) => {
             if (data.action === google.picker.Action.PICKED) {
+              // 확장 프로그램 본체(popup.js)로 승인 완료 신호 송신
               chrome.runtime.sendMessage({ action: "AUTH_SUCCESS" });
-              window.close();
+              window.close(); // 승인 완료 후 창 닫기
             } else if (data.action === google.picker.Action.CANCEL) {
               document.getElementById('start-zone').style.display = 'block';
               document.getElementById('loading-zone').style.display = 'none';
