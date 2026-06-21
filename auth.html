@@ -7,14 +7,28 @@
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding-top: 80px; background: #f8f9fa; color: #333; }
     h2 { font-size: 18px; font-weight: bold; color: #1a73e8; margin-top: 0; }
     p { font-size: 13px; color: #666; line-height: 1.5; margin-bottom: 25px; }
-    .btn-connect { padding: 12px 24px; background: #1a73e8; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: background 0.2s, transform 0.1s; }
+    
+    .btn-connect {
+      padding: 12px 24px;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: background 0.2s, transform 0.1s;
+    }
     .btn-connect:hover { background: #1557b0; }
     .btn-connect:active { transform: scale(0.98); }
+
     #error-msg { color: #d93025; font-size: 12px; margin-top: 20px; display: none; font-weight: bold; }
+    
     #loading-zone { display: none; }
     .loader { border: 4px solid #f3f3f3; border-top: 4px solid #1a73e8; border-radius: 50%; width: 44px; height: 44px; animation: spin 1s linear infinite; margin: 24px auto; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-  </script>
+  </style>
   <script src="https://apis.google.com/js/api.js"></script>
 </head>
 <body>
@@ -34,16 +48,19 @@
   <div id="error-msg"></div>
 
   <script>
+    // 유저님의 무결점 웹 전용 키 패키지 정밀 고정
     const clientId = "690467533026-u1gabgn2708n38nqk0j0lffbjppf4vec.apps.googleusercontent.com";
     const developerKey = "AIzaSyAmXkHDc5BjBRv_gvamTAMqmoY1YQCKh0c";
 
     window.onload = () => {
+      // 구글 로그인 후 토큰과 함께 복귀했는지 주소창 해시(#) 확인
       const hash = window.location.hash.substring(1);
       const hashParams = new URLSearchParams(hash);
       const accessToken = hashParams.get('access_token');
       const state = hashParams.get('state');
 
       if (accessToken && state) {
+        // 🔄 [모드 2: 구글 로그인을 무사히 마치고 돌아온 상태]
         const parts = decodeURIComponent(state).split('^^^');
         const targetPresentationId = parts[0];
         const originalRedirectUri = parts[1];
@@ -51,6 +68,7 @@
         document.getElementById('start-zone').style.display = 'none';
         document.getElementById('loading-zone').style.display = 'block';
 
+        // 피커 라이브러리 주입 및 파일 선택창 레이어 인라인 생성
         gapi.load('picker', {
           'callback': () => {
             try {
@@ -62,11 +80,11 @@
                 .addView(view)
                 .setOAuthToken(accessToken)
                 .setDeveloperKey(developerKey)
-                .enableFeature(google.picker.Feature.SUPPORT_DRIVES)
+                .enableFeature(google.picker.Feature.SUPPORT_DRIVES) // 팀/공유 드라이브 완벽 오픈
                 .setCallback((data) => {
                   if (data.action === google.picker.Action.PICKED) {
                     
-                    // 💡 [핵심 교정] 웹 오리진에서 안전하게 구글 API를 선제 타격하여 알맹이를 빼옵니다!
+                    // 💡 [핵심] 구글 오리진 차단을 차단하기 위해, 웹 도메인 안전지대에서 다이렉트로 슬라이드 구조를 선제 타격 탈취!
                     fetch(`https://slides.googleapis.com/v1/presentations/${targetPresentationId}`, {
                       headers: { 'Authorization': `Bearer ${accessToken}` }
                     })
@@ -75,13 +93,13 @@
                       return res.json();
                     })
                     .then(presentationJSON => {
-                      // 털어온 순수 JSON 텍스트를 기지국 해시 뒤에 얹어 완벽 사출!
+                      // 수확에 성공한 순수 JSON 텍스트를 기지국 복귀 주소 뒤에 매달아 최종 사출!
                       const encodedData = encodeURIComponent(JSON.stringify(presentationJSON));
                       window.location.href = `${originalRedirectUri}#data=${encodedData}`;
                     })
                     .catch(err => {
-                      showError("슬라이드 이미지 구조 추출에 실패했습니다. 권한이 없거나 만료된 세션입니다.");
-                      setTimeout(() => { window.location.href = originalRedirectUri; }, 2000);
+                      showError("슬라이드 구조 추출에 실패했습니다. 공유 권한이 제한되었거나 만료된 세션입니다.");
+                      setTimeout(() => { window.location.href = originalRedirectUri; }, 2500);
                     });
 
                   } else if (data.action === google.picker.Action.CANCEL) {
@@ -96,6 +114,7 @@
           }
         });
       } else {
+        // 🚀 [모드 1: 확장 프로그램 본체에서 처음 인증 요청을 타고 넘어온 상태]
         const urlParams = new URLSearchParams(window.location.search);
         const targetPresentationId = urlParams.get('id');
         const redirectUri = urlParams.get('redirect');
@@ -106,6 +125,8 @@
 
           document.getElementById('btnConnect').onclick = () => {
             const stateStr = `${targetPresentationId}^^^${redirectUri}`;
+            
+            // 하위 팝업 블로킹을 우회하기 위해 보안 윈도우 창 전체를 구글 정식 OAuth2 단독 페이지로 강제 치환 이동!
             const oauthUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
               `client_id=${clientId}` +
               `&redirect_uri=${encodeURIComponent('https://unnormaljh.github.io/auth.html')}` +
@@ -116,7 +137,7 @@
             window.location.href = oauthUrl;
           };
         } else {
-          showError("인증 파라미터가 누락되었습니다. 확장 프로그램을 다시 열어주세요.");
+          showError("인증 파라미터가 누락되었습니다. 확장 프로그램을 닫고 다시 실행해 주세요.");
         }
       }
     };
