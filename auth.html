@@ -37,7 +37,7 @@
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const targetPresentationId = urlParams.get('id');
-    const extId = urlParams.get('extId'); // 💡 본체 확장 프로그램 고유 ID 수신
+    const redirectUri = urlParams.get('redirect'); // 💡 크롬 보안 리디렉션 기지국 주소 접수
     
     const clientId = "690467533026-u1gabgn2708n38nqk0j0lffbjppf4vec.apps.googleusercontent.com";
     const developerKey = "AIzaSyAmXkHDc5BjBRv_gvamTAMqmoY1YQCKh0c";
@@ -59,8 +59,8 @@
     });
 
     document.getElementById('btnConnect').addEventListener('click', () => {
-      if (!targetPresentationId) {
-        showError("슬라이드 ID 파라미터가 누락되었습니다.");
+      if (!targetPresentationId || !redirectUri) {
+        showError("필수 인증 파라미터가 누락되었습니다.");
         return;
       }
       tokenClient.requestAccessToken();
@@ -79,13 +79,11 @@
           .enableFeature(google.picker.Feature.SUPPORT_DRIVES) 
           .setCallback((data) => {
             if (data.action === google.picker.Action.PICKED) {
-              // 💡 [핵심] 유저가 파일을 선택하면 만능 웹 토큰을 본체(popup.js)로 무선 전송합니다!
-              if (window.chrome && chrome.runtime && extId) {
-                chrome.runtime.sendMessage(extId, { action: "AUTH_SUCCESS", token: accessToken });
-              }
-              window.close();
+              // 💡 [무적의 피날레] 선택 완료 시 본체 기지국 주소 해시 뒤에 토큰을 태워 강제 리디렉션!
+              // 이렇게 하면 크롬 브라우저가 알아서 감지하고 창을 안전하게 자동 종료하며 토큰을 popup.js에 꽂아줍니다.
+              window.location.href = `${redirectUri}#token=${encodeURIComponent(accessToken)}`;
             } else if (data.action === google.picker.Action.CANCEL) {
-              window.close();
+              window.location.href = redirectUri; // 취소 시에도 안전하게 복귀
             }
           })
           .build();
