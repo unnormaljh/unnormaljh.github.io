@@ -38,16 +38,16 @@
     function openTargetPicker() {
       try {
         const view = new google.picker.DocsView(google.picker.ViewId.PRESENTATIONS);
-        view.setEnableSharedDrives(true); // 공유 드라이브 완벽 지원
-        view.setFileIds([targetPresentationId]); // 타겟팅 파일 강제 포커싱
-
+        
+        view.setFileIds([targetPresentationId]);
+    
         const picker = new google.picker.PickerBuilder()
           .addView(view)
-          .setOAuthToken(accessToken) // 🌟 중요: 확장 프로그램 본체의 ID 권한으로 피커를 승인합니다!
+          .setOAuthToken(accessToken)
           .setDeveloperKey(developerKey)
+          .setEnableSharedDrives(true) // 💡 [교정] 여기에 넣어야 구글 API가 정상 인식합니다! (Builder의 메서드임)
           .setCallback((data) => {
             if (data.action === google.picker.Action.PICKED || data.action === google.picker.Action.CANCEL) {
-              // 선택 완료 혹은 취소 시 창을 닫음 -> popup.js가 이를 감지하고 자동 새로고침 처리
               window.close();
             }
           })
