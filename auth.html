@@ -7,24 +7,10 @@
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding-top: 80px; background: #f8f9fa; color: #333; }
     h2 { font-size: 18px; font-weight: bold; color: #1a73e8; margin-top: 0; }
     p { font-size: 13px; color: #666; line-height: 1.5; margin-bottom: 25px; }
-    
-    .btn-connect {
-      padding: 12px 24px;
-      background: #1a73e8;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: bold;
-      cursor: pointer;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      transition: background 0.2s, transform 0.1s;
-    }
+    .btn-connect { padding: 12px 24px; background: #1a73e8; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: background 0.2s, transform 0.1s; }
     .btn-connect:hover { background: #1557b0; }
     .btn-connect:active { transform: scale(0.98); }
-
     #error-msg { color: #d93025; font-size: 12px; margin-top: 20px; display: none; font-weight: bold; }
-    
     #loading-zone { display: none; }
     .loader { border: 4px solid #f3f3f3; border-top: 4px solid #1a73e8; border-radius: 50%; width: 44px; height: 44px; animation: spin 1s linear infinite; margin: 24px auto; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -51,11 +37,10 @@
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const targetPresentationId = urlParams.get('id');
+    const extId = urlParams.get('extId'); // 💡 본체 확장 프로그램 고유 ID 수신
     
     const clientId = "690467533026-u1gabgn2708n38nqk0j0lffbjppf4vec.apps.googleusercontent.com";
-        
     const developerKey = "AIzaSyAmXkHDc5BjBRv_gvamTAMqmoY1YQCKh0c";
-    
     let accessToken = null;
 
     const tokenClient = google.accounts.oauth2.initTokenClient({
@@ -67,17 +52,15 @@
           return;
         }
         accessToken = tokenResponse.access_token;
-        
         document.getElementById('start-zone').style.display = 'none';
         document.getElementById('loading-zone').style.display = 'block';
-        
         gapi.load('picker', { 'callback': openTargetPicker });
       },
     });
 
     document.getElementById('btnConnect').addEventListener('click', () => {
       if (!targetPresentationId) {
-        showError("슬라이드 ID 파라미터가 누락되었습니다. 확장 프로그램을 다시 켜주세요.");
+        showError("슬라이드 ID 파라미터가 누락되었습니다.");
         return;
       }
       tokenClient.requestAccessToken();
@@ -87,18 +70,21 @@
       try {
         const view = new google.picker.DocsView(google.picker.ViewId.DOCS);
         view.setMimeTypes("application/vnd.google-apps.presentation");
-        
-        // 💡 [정답 반영 1] fileIds는 대괄호가 없는 순수 '문자열'이어야만 구글 규격에 매칭됩니다.
         view.setFileIds(targetPresentationId);
 
         const picker = new google.picker.PickerBuilder()
           .addView(view)
           .setOAuthToken(accessToken) 
           .setDeveloperKey(developerKey)
-          // 💡 [정답 반영 2] 공유 드라이브를 완벽하게 연동하는 구글 공식 피처 명칭입니다.
           .enableFeature(google.picker.Feature.SUPPORT_DRIVES) 
           .setCallback((data) => {
-            if (data.action === google.picker.Action.PICKED || data.action === google.picker.Action.CANCEL) {
+            if (data.action === google.picker.Action.PICKED) {
+              // 💡 [핵심] 유저가 파일을 선택하면 만능 웹 토큰을 본체(popup.js)로 무선 전송합니다!
+              if (window.chrome && chrome.runtime && extId) {
+                chrome.runtime.sendMessage(extId, { action: "AUTH_SUCCESS", token: accessToken });
+              }
+              window.close();
+            } else if (data.action === google.picker.Action.CANCEL) {
               window.close();
             }
           })
@@ -111,10 +97,7 @@
 
     function showError(msg) {
       const errEl = document.getElementById('error-msg');
-      if (errEl) {
-        errEl.innerText = msg;
-        errEl.style.display = 'block';
-      }
+      if (errEl) { errEl.innerText = msg; errEl.style.display = 'block'; }
     }
   </script>
 </body>
