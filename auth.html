@@ -5,30 +5,58 @@
   <title>Google Drive Access Authorization</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding-top: 80px; background: #f8f9fa; color: #333; }
+    h2 { font-size: 18px; font-weight: bold; color: #1a73e8; margin-top: 0; }
+    p { font-size: 13px; color: #666; line-height: 1.5; margin-bottom: 25px; }
+    
+    /* ✨ 프리미엄 구글 연결 버튼 스타일 */
+    .btn-connect {
+      padding: 12px 24px;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn-connect:hover { background: #1557b0; }
+    .btn-connect:active { transform: scale(0.98); }
+
+    #error-msg { color: #d93025; font-size: 12px; margin-top: 20px; display: none; font-weight: bold; }
+    
+    /* 로딩 상태 뷰 */
+    #loading-zone { display: none; }
     .loader { border: 4px solid #f3f3f3; border-top: 4px solid #1a73e8; border-radius: 50%; width: 44px; height: 44px; animation: spin 1s linear infinite; margin: 24px auto; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    h2 { font-size: 18px; font-weight: bold; color: #1a73e8; }
-    p { font-size: 13px; color: #666; line-height: 1.5; }
-    #error-msg { color: #d93025; font-size: 12px; margin-top: 15px; display: none; font-weight: bold; }
   </style>
   <script src="https://apis.google.com/js/api.js"></script>
   <script src="https://accounts.google.com/gsi/client"></script>
 </head>
 <body>
-  <h2>Google Picker Security Syncing...</h2>
-  <div class="loader"></div>
-  <p>구글 보안 규정에 맞추어 안전하게<br>현재 슬라이드 문서 접근 권한을 동기화하고 있습니다.</p>
+
+  <div id="start-zone">
+    <h2>Google Drive 권한 동기화</h2>
+    <p>구글 보안 규정에 맞추어 안전하게 현재 슬라이드 문서의<br>이미지를 추출할 수 있도록 아래 버튼을 눌러 승인해 주세요.</p>
+    <button class="btn-connect" id="btnConnect">🔐 구글 계정 연결하기</button>
+  </div>
+
+  <div id="loading-zone">
+    <h2>Google Picker Security Syncing...</h2>
+    <div class="loader"></div>
+    <p>안전하게 보안 동기화를 진행하고 있습니다. 잠시만 기다려주세요...</p>
+  </div>
+
   <div id="error-msg"></div>
 
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const targetPresentationId = urlParams.get('id');
-    
-    // 💡 중요: 1단계에서 세팅한 '웹 애플리케이션'용 Client ID를 적어주셔야 안전합니다.
     const clientId = "690467533026-cuobfog487vm03esjavm5uuf2s79i097.apps.googleusercontent.com";
     let accessToken = null;
 
-    // 1. 초기화 및 세션 갱신
+    // 구글 Identity Services 토큰 클라이언트 초기화
     const tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: 'https://www.googleapis.com/auth/drive.file',
@@ -38,28 +66,38 @@
           return;
         }
         accessToken = tokenResponse.access_token;
+        
+        // 화면 전환: 버튼 숨기고 로딩 스피너 작동
+        document.getElementById('start-zone').style.display = 'none';
+        document.getElementById('loading-zone').style.display = 'block';
+        
+        // 구글 피커 라이브러리 로드
         gapi.load('picker', { 'callback': openTargetPicker });
       },
     });
 
-    window.onload = () => {
-      // 🔥 [변경] prompt: 'none' 편법을 걷어내고 정석대로 유저 동의 창을 띄웁니다!
-      tokenClient.requestAccessToken(); 
-    };
+    // 🔥 [핵심] 브라우저 팝업 차단을 우회하기 위해 '사용자 버튼 클릭 이벤트' 핸들러 안에서 호출합니다!
+    document.getElementById('btnConnect').addEventListener('click', () => {
+      tokenClient.requestAccessToken();
+    });
 
     function openTargetPicker() {
       try {
         const view = new google.picker.View(google.picker.ViewId.PRESENTATIONS);
-        view.setFileIds(targetPresentationId);
+        view.setFileIds(targetPresentationId); // 현재 슬라이드 ID 강제 주입형 타겟팅
 
         const picker = new google.picker.PickerBuilder()
           .addView(view)
           .setOAuthToken(accessToken)
           .setCallback((data) => {
             if (data.action === google.picker.Action.PICKED) {
+              // 크롬 확장 프로그램 팝업창(popup.js)으로 인증 성공 무선 신호 송신
               chrome.runtime.sendMessage({ action: "AUTH_SUCCESS" });
-              window.close();
+              window.close(); // 동기화 창 자동 종료
             } else if (data.action === google.picker.Action.CANCEL) {
+              // 사용자가 취소하면 다시 홈 화면으로 롤백
+              document.getElementById('start-zone').style.display = 'block';
+              document.getElementById('loading-zone').style.display = 'none';
               showError("사용자가 권한 요청을 취소했습니다.");
             }
           })
