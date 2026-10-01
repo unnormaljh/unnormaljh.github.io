@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>슬라이드 파일 선택</title>
+  <style>
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f8f9fa;
+      color: #333;
+    }
+
+    #status {
+      font-size: 14px;
+      font-weight: bold;
+      color: #1a73e8;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    #status.error {
+      color: #e53e3e;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="status">⚙️ 파일 선택 창을 여는 중...</div>
+
+  <script>
+    // My Slide Image Downloader 전용 Google Picker 페이지.
+    // 확장 프로그램(background.js)이 이 페이지를 새 창으로 띄우면,
+    // 토큰을 메시지로 받아 Picker를 열고, 선택 결과(파일 ID)만 확장으로 돌려준다.
+    // 슬라이드 데이터 자체는 이 페이지에서 다루지 않는다.
+    const API_KEY = 'AIzaSyAmXkHDc5BjBRv_gvamTAMqmoY1YQCKh0c'; // Cloud Console의 "My Slide Image Downloader Key"
+    const APP_ID = '690467533026';  // Cloud 프로젝트 번호 (OAuth client_id 앞자리)
+
+    const extId = new URLSearchParams(location.search).get('ext');
+    const statusEl = document.getElementById('status');
+
+    function setStatus(text, isError) {
+      statusEl.innerText = text;
+      statusEl.classList.toggle('error', !!isError);
+    }
+
+    function sendToExtension(message) {
+      return new Promise((resolve, reject) => {
+        if (!window.chrome || !chrome.runtime || !chrome.runtime.sendMessage) {
+          reject(new Error('EXTENSION_UNREACHABLE'));
+          return;
+        }
+        chrome.runtime.sendMessage(extId, message, (response) => {
+          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+          else resolve(response);
+        });
+      });
+    }
+
+    async function reportResult(result) {
+      try {
+        await sendToExtension({ type: 'pickerResult', ...result });
+        setStatus(result.cancelled ? '파일 선택이 취소되었습니다. 이 창을 닫아 주세요.' : '✅ 완료되었습니다. 이 창은 자동으로 닫힙니다.');
+      } catch (e) {
+        setStatus('⚠️ 확장 프로그램에 결과를 전달하지 못했습니다.\n이 창을 닫고 다시 시도해 주세요.', true);
+      }
+    }
+
+    function onPickerAction(data) {
+      const action = data[google.picker.Response.ACTION];
+      if (action === google.picker.Action.PICKED) {
+        const docs = data[google.picker.Response.DOCUMENTS] || [];
+        const fileIds = docs.map((doc) => doc[google.picker.Document.ID]);
+        reportResult({ fileIds });
+      } else if (action === google.picker.Action.CANCEL) {
+        reportResult({ cancelled: true });
+      }
+    }
+
+    async function openPicker() {
+      let session;
+      try {
+        session = await sendToExtension({ type: 'getPickerSession' });
+      } catch (e) {
+        setStatus('⚠️ 확장 프로그램과 연결하지 못했습니다.\n확장 프로그램에서 다시 시도해 주세요.', true);
+        return;
+      }
+      if (!session || session.error || !session.token) {
+        setStatus('⚠️ 인증 정보가 없습니다.\n확장 프로그램에서 다시 시도해 주세요.', true);
+        return;
+      }
+
+      const view = new google.picker.DocsView(google.picker.ViewId.PRESENTATIONS)
+        .setMode(google.picker.DocsViewMode.LIST);
+      if (session.presentationId) view.setFileIds(session.presentationId);
+
+      const picker = new google.picker.PickerBuilder()
+        .addView(view)
+        .setOAuthToken(session.token)
+        .setDeveloperKey(API_KEY)
+        .setAppId(APP_ID)
+        .setOrigin(location.origin)
+        .setLocale('ko')
+        .setTitle('지금 열려 있는 슬라이드 파일을 선택해 주세요')
+        .enableFeature(google.picker.Feature.NAV_HIDDEN)
+        .setCallback(onPickerAction)
+        .build();
+      picker.setVisible(true);
+      setStatus('');
+    }
+
+    if (!/^[a-p]{32}$/.test(extId || '')) {
+      setStatus('⚠️ 잘못된 접근입니다.\n확장 프로그램에서 다시 시도해 주세요.', true);
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://apis.google.com/js/api.js';
+      script.addEventListener('load', () => gapi.load('picker', openPicker));
+      script.addEventListener('error', () => setStatus('⚠️ Google Picker를 불러오지 못했습니다.', true));
+      document.head.appendChild(script);
+    }
+  </script>
+</body>
+
+</html>
